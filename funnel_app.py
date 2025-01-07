@@ -160,13 +160,13 @@ sezione_selezionata = st.sidebar.radio("Seleziona un'opzione", options=menu_opzi
 
 # Sezione per modificare i dati
 if sezione_selezionata == "Modifica dati":
-    st.title("Modifica Dati Salvati")
+    st.title("Modifica o Elimina Dati Salvati")
     
     if data.empty:
-        st.warning("Nessun dato disponibile da modificare.")
+        st.warning("Nessun dato disponibile da modificare o eliminare.")
     else:
-        # Seleziona il record da modificare
-        indice_record = st.selectbox("Seleziona il record da modificare", data.index, format_func=lambda i: f"{data.loc[i, 'Mese']} - {data.loc[i, 'Canale']}")
+        # Seleziona il record da modificare o eliminare
+        indice_record = st.selectbox("Seleziona il record da modificare o eliminare", data.index, format_func=lambda i: f"{data.loc[i, 'Mese']} - {data.loc[i, 'Canale']}")
 
         if indice_record is not None:
             record_selezionato = data.loc[indice_record]
@@ -201,6 +201,12 @@ if sezione_selezionata == "Modifica dati":
                 }
                 modifica_dati(indice_record, nuovi_valori)
                 st.success("Record aggiornato con successo! Ricarica manualmente la pagina per vedere i dati aggiornati.")
+
+            # Bottone per eliminare il record selezionato
+            if st.button("Elimina"):
+                data = data.drop(indice_record).reset_index(drop=True)  # Rimuove il record
+                save_data(data)  # Salva il dataframe aggiornato
+                st.success("Record eliminato con successo! Ricarica manualmente la pagina per vedere i dati aggiornati.")
 
 # Scheda per inserimento dati
 elif sezione_selezionata == "Inserisci dati":
