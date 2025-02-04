@@ -10,13 +10,17 @@ DATA_FILE = "funnel_data.csv"
 def load_data():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
+        # Aggiungi colonna "Note" se mancante
         if "Note" not in df.columns:
-            df["Note"] = ""  # Aggiungi colonna "Note" se mancante
+            df["Note"] = ""
+        # Aggiungi colonna "Valore contratti" se mancante
+        if "Valore contratti" not in df.columns:
+            df["Valore contratti"] = 0
         return df
     else:
         return pd.DataFrame(columns=["Mese", "Canale", "Investimento", "Impression", "Click", "Lead", 
                                      "Assessment Fissati", "Assessment Fatti", 
-                                     "Accordi Inviati", "Vendite", "Note"])
+                                     "Accordi Inviati", "Vendite", "Note", "Valore contratti"])
 
 # Funzione per salvare i dati
 def save_data(df):
@@ -37,25 +41,27 @@ def calcola_metriche(dati, globale=False):
     investimento_totale = dati["Investimento"].sum()
     lead_totali = dati["Lead"].sum()
     vendite_totali = dati["Vendite"].sum()
-
     cpl = investimento_totale / lead_totali if lead_totali > 0 else None
     cac = investimento_totale / vendite_totali if vendite_totali > 0 else None
 
+    click_totali = dati["Click"].sum()
+    impression_totali = dati["Impression"].sum()
+    conversione_landing = (click_totali / impression_totali) * 100 if impression_totali > 0 else None
+    cpc = investimento_totale / click_totali if click_totali > 0 else None
+
+    valore_contratti_totale = dati["Valore contratti"].sum()
+
     metriche = {
         "Investimento Totale": investimento_totale,
+        "CPC (Costo per Click)": cpc,
         "CPL (Costo per Lead)": cpl,
+        "Tasso di conversione Landing": conversione_landing,
         "CAC (Costo Cliente)": cac,
+        "Valore contratti": valore_contratti_totale,
     }
 
-    if not globale:
-        click_totali = dati["Click"].sum()
-        conversione_landing = (click_totali / dati["Impression"].sum()) * 100 if dati["Impression"].sum() > 0 else None
-        cpc = investimento_totale / click_totali if click_totali > 0 else None
-        metriche["CPC (Costo per Click)"] = cpc
-        metriche["Tasso di conversione Landing"] = conversione_landing
-
-    # Tassi di conversione
-    conversione_lead = (lead_totali / dati["Click"].sum()) * 100 if dati["Click"].sum() > 0 else None
+    # Calcolo dei tassi di conversione per le varie fasi
+    conversione_lead = (lead_totali / click_totali) * 100 if click_totali > 0 else None
     conversione_assessment_fissati = (dati["Assessment Fissati"].sum() / lead_totali) * 100 if lead_totali > 0 else None
     conversione_assessment_fatti = (dati["Assessment Fatti"].sum() / dati["Assessment Fissati"].sum()) * 100 if dati["Assessment Fissati"].sum() > 0 else None
     conversione_accordi = (dati["Accordi Inviati"].sum() / dati["Assessment Fatti"].sum()) * 100 if dati["Assessment Fatti"].sum() > 0 else None
@@ -101,15 +107,24 @@ def mostra_metriche_in_card(metriche):
     cols = st.columns(3)
     i = 0
     for key, value in metriche.items():
-        if isinstance(value, list):  # Ignora i tassi di conversione
+        if isinstance(value, list):  # Ignora i tassi di conversione (li gestiamo separatamente)
             continue
-        formatted_value = f"{value:.2f}" if value is not None else "N/A"
+        if value is None:
+            formatted_value = "N/A"
+        else:
+            # Formattazione: i valori in euro hanno il simbolo € e il tasso di conversione in %
+            if key in ["Investimento Totale", "CPC (Costo per Click)", "CPL (Costo per Lead)", "CAC (Costo Cliente)", "Valore contratti"]:
+                formatted_value = f"€{value:.2f}"
+            elif key == "Tasso di conversione Landing":
+                formatted_value = f"{value:.2f}%"
+            else:
+                formatted_value = f"{value:.2f}"
         with cols[i % 3]:
             st.markdown(
                 f"""
                 <div class="card">
                     <div class="card-title">{key}</div>
-                    <div class="card-value">{formatted_value if "€" in key else f"€{formatted_value}"}</div>
+                    <div class="card-value">{formatted_value}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -182,6 +197,7 @@ if sezione_selezionata == "Modifica dati":
             assessment_fatti_modificati = st.number_input("Assessment Fatti", value=record_selezionato["Assessment Fatti"])
             accordi_inviati_modificati = st.number_input("Accordi Inviati", value=record_selezionato["Accordi Inviati"])
             vendite_modificate = st.number_input("Vendite", value=record_selezionato["Vendite"])
+            valore_contratti_modificato = st.number_input("Valore contratti (€)", value=record_selezionato.get("Valore contratti", 0))
             note_modificate = st.text_area("Note", record_selezionato["Note"])
 
             # Bottone per salvare le modifiche
@@ -197,6 +213,7 @@ if sezione_selezionata == "Modifica dati":
                     "Assessment Fatti": assessment_fatti_modificati,
                     "Accordi Inviati": accordi_inviati_modificati,
                     "Vendite": vendite_modificate,
+                    "Valore contratti": valore_contratti_modificato,
                     "Note": note_modificate
                 }
                 modifica_dati(indice_record, nuovi_valori)
@@ -231,6 +248,7 @@ elif sezione_selezionata == "Inserisci dati":
     assessment_fatti = st.number_input("Assessment Fatti", min_value=0, step=1)
     accordi_inviati = st.number_input("Accordi Inviati", min_value=0, step=1)
     vendite = st.number_input("Vendite", min_value=0, step=1)
+    valore_contratti = st.number_input("Valore contratti (€)", min_value=0.0, step=50.0)
     note = st.text_area("Aggiungi una nota (opzionale)")
 
     if st.button("Salva"):
@@ -245,6 +263,7 @@ elif sezione_selezionata == "Inserisci dati":
             "Assessment Fatti": [assessment_fatti],
             "Accordi Inviati": [accordi_inviati],
             "Vendite": [vendite],
+            "Valore contratti": [valore_contratti],
             "Note": [note],
         })
         data = pd.concat([data, nuovo_dato], ignore_index=True)
@@ -255,12 +274,12 @@ elif sezione_selezionata == "Inserisci dati":
     st.subheader("Dati Salvati")
     st.dataframe(data)
 
-# Schede per visualizzare metriche e grafici
+# Schede per visualizzare metriche e grafici (dashboard per canali o Globale)
 else:
     st.title(f"Visualizzazione {sezione_selezionata}")
 
-    globale = sezione_selezionata == "Globale"
-    if not globale:
+    # Filtro dati per canale (se non Globale)
+    if sezione_selezionata != "Globale":
         dati_canale = data[data["Canale"] == sezione_selezionata]
     else:
         dati_canale = data
@@ -274,7 +293,7 @@ else:
     if dati_canale.empty:
         st.warning(f"Nessun dato disponibile per {sezione_selezionata}.")
     else:
-        metriche = calcola_metriche(dati_canale, globale=globale)
+        metriche = calcola_metriche(dati_canale)
         st.subheader("Metriche")
         mostra_metriche_in_card(metriche)
         st.subheader("Grafico Funnel")
